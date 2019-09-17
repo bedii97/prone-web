@@ -582,7 +582,7 @@ class DbOperations
                 $stmt->execute(array($postId, $userId));
                 if($stmt){
                     $to = $this->getPostOwnerUsername($postId);
-                    if($userName != $to){
+                    if($userName != $to){ //Kendi postunu beğenirse bildirim gitmesin
                         $notify = new PushNotification;
                         $notify->postLikeNotification($userName, $to, $postId);
                         return true;

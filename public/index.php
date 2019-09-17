@@ -444,15 +444,23 @@ $app->post('/postreport', function (Request $request, Response $response) {
 
 $app->post('/denmark', function (Request $request, Response $response) {
     $request_data = $request->getParsedBody();
-    //$denmark = $request_data['denmark'];
+    $denmark = $request_data['denmark'];
     //$db = new DbOperations;
-    //$cikti = $db->getIP();
-    echo $_SERVER['HTTP_USER_AGENT'];
-    /*$response_data['denmark'] = $cikti;
+    date_default_timezone_set('Europe/Istanbul');
+    $lastDate = date_create($denmark);
+    $nowDate = date_create(date('Y-m-d H:i:s'));
+    $addTime = '1 days';
+    date_add($lastDate, date_interval_create_from_date_string($addTime));
+    if($lastDate < $nowDate){
+        $cikti = "addedTime < nowDate";
+    }else{
+        $cikti = "else";
+    }
+    $response_data['denmark'] = $cikti;
     $response->write(json_encode($response_data));
     return $response
         ->withHeader('Content-type', 'application/json')
-        ->withStatus(200);*/
+        ->withStatus(200);
 }); //Get Posts
 
 $app->post('/forgetpassword', function (Request $request, Response $response) {
