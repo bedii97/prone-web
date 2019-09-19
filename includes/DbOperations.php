@@ -402,6 +402,11 @@ class DbOperations
                 $postTitle = $this->getPostTitleByPostID($postId);
                 $notify['postId'] = $postId;
                 $notify['question'] = $postTitle;
+            }else if($notify['type'] == "postComment"){
+                $postId = $this->getNotificationPostIdByNotificationIDForComment($rowNotify->NotificationID);
+                $postTitle = $this->getPostTitleByPostID($postId);
+                $notify['postId'] = $postId;
+                $notify['question'] = $postTitle;
             }
             array_push($notifies, $notify);
         }
@@ -419,6 +424,17 @@ class DbOperations
         $notify = new PushNotification;
         $result = $notify->prepareNotification($title, $body);
         echo $result;
+    } //Updated
+
+    public function deleteUserToken($userName, $userToken){
+        $userId = $this->getUserIDByUserName($userName);
+        $stmt = $this->con->prepare("DELETE FROM user_token WHERE UserId = ? AND UserToken = ?");
+        $stmt->execute(array($userId, $userToken));
+        if ($stmt) {
+            return true;
+        } else {
+            return false;
+        }
     } //Updated
 
     public function userToken($token){
@@ -839,6 +855,14 @@ class DbOperations
                 $stmt = $this->con->prepare("INSERT INTO comment (UserId, PostId, CommentContent) VALUES (?, ?, ?)"); //3 Parametre
                 $stmt->execute(array($userID, $postID, $comment));
                 if ($stmt) {
+                    $to = $this->getPostOwnerUsername($postID);
+                    if($userName != $to){ //Kendi postunu beğenirse bildirim gitmesin
+                        $notify = new PushNotification;
+                        $notify->postCommentNotification($userName, $to, $postID);
+                        return true;
+                    }else{
+                        return true;
+                    }
                     return COMMENT_SUCCESS;
                 } else {
                     return COMMENT_UNSUCCESS;
@@ -1535,6 +1559,14 @@ class DbOperations
         $stmt->execute(array($postID));
         $row = $stmt->fetch(PDO::FETCH_OBJ);
         return @$row->UserName;
+    } //Updated
+
+    public function getNotificationPostIdByNotificationIDForComment($notificationID){
+        $sql = "SELECT PostId FROM notification_postcomment_view WHERE NotificationId = ?";
+        $stmt = $this->con->prepare($sql);
+        $stmt->execute(array($notificationID));
+        $row = $stmt->fetch(PDO::FETCH_OBJ);
+        return @$row->PostId;
     } //Updated
 
     public function getNotificationPostIdByNotificationID($notificationID){

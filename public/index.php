@@ -21,6 +21,56 @@ $token = bin2hex($token);
 //Code 203 = User Failure
 //Code 204 = No Content
 
+$app->post('/deleteusertoken', function (Request $request, Response $response) {
+    if (!haveEmptyParameters(array('UserName', 'UserPassword', 'Token'), $request, $response)) {
+        $request_data = $request->getParsedBody();
+        $userName = $request_data['UserName'];
+        $userPassword = $request_data['UserPassword'];
+        $token = $request_data['Token'];
+        $db = new DbOperations;
+        $result = $db->userLogin($userName, $userPassword);
+        if ($result == USER_AUTHENTICATED) {
+            $result = $db->deleteUserToken($userName, $token);
+            if ($result == true) {
+                $message = array();
+                $message['error'] = false;
+                $message['message'] = 'Success';
+                $response->write(json_encode($message));
+                return $response
+                    ->withHeader('Content-type', 'application/json')
+                    ->withStatus(201);
+            } else {
+                $message = array();
+                $message['error'] = true;
+                $message['message'] = 'UnSuccess';
+                $response->write(json_encode($message));
+                return $response
+                    ->withHeader('Content-type', 'application/json')
+                    ->withStatus(422);
+            }
+        } else if ($result == USER_NOT_FOUND) {
+            $response_data = array();
+            $response_data['error'] = true;
+            $response_data['message'] = 'User not exist';
+            $response->write(json_encode($response_data));
+            return $response
+                ->withHeader('Content-type', 'application/json')
+                ->withStatus(200);
+        } else if ($result == USER_PASSWORD_DO_NOT_MATCH) {
+            $response_data = array();
+            $response_data['error'] = true;
+            $response_data['message'] = 'Invalid credential';
+            $response->write(json_encode($response_data));
+            return $response
+                ->withHeader('Content-type', 'application/json')
+                ->withStatus(200);
+        }
+    }
+    return $response
+        ->withHeader('Content-type', 'application/json')
+        ->withStatus(400);
+}); //Add Token
+
 $app->post('/replyreport', function (Request $request, Response $response) {
     if (!haveEmptyParameters(array('UserName', 'UserPassword', 'ReplyId', 'CategoryId', 'Content'), $request, $response)) {
         $request_data = $request->getParsedBody();
