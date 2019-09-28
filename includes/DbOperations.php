@@ -196,6 +196,8 @@ class DbOperations
         }
     }
 
+    
+
     public function getFollowing($userName){
         $userId = $this->getUserIDByUserName($userName);
         $sql = "SELECT * FROM follow_view WHERE UserId = ?";
@@ -325,6 +327,7 @@ class DbOperations
             $options = $this->getMostVotedOptionByPostID($rowPost->PostID);
             $post['option'] = $options;
             //**En çok oylanan option çekildi */
+            $post['category'] = $rowPost->CategoryName; //Date Çekildi
             $post['date'] = $rowPost->PostDate; //Date Çekildi
             $post['username'] = $rowPost->UserName;
             $post['userid'] = $rowPost->UserID;
@@ -616,6 +619,36 @@ class DbOperations
         }
     }
 
+    public function categoryUnFollow($userName, $categoryId){
+        $userID = $this->getUserIDByUserName($userName);
+        if($this->isUserFollowingCategory($userID, $categoryId)){
+            $stmt = $this->con->prepare("DELETE FROM user_category WHERE (UserId = ? AND CategoryId = ?)");
+            $stmt->execute(array($userID, $categoryId));
+            if($stmt){
+                return UNFOLLOW_SUCCESS;
+            }else{
+                return UNFOLLOW_ERROR;
+            }
+        }else{
+            return ALREADY_UNFOLLOWING;
+        }
+    }
+
+    public function categoryFollow($userName, $categoryId){
+        $userID = $this->getUserIDByUserName($userName);
+        if(!$this->isUserFollowingCategory($userID, $categoryId)){
+            $stmt = $this->con->prepare("INSERT INTO user_category (UserId, CategoryId) VALUES (?, ?)");
+            $stmt->execute(array($userID, $categoryId));
+            if($stmt){
+                return FOLLOW_SUCCESS;
+            }else{
+                return FOLLOW_ERROR;
+            }
+        }else{
+            return ALREADY_FOLLOWING;
+        }
+    }
+
     public function unFollow($userName, $targetUserName){ //userId = Takip eden, FollowId = Takip edilen //Adamın takipçileri FollowId ile bulunuyor //Adamın takip ettikleri UserId ile bulunuyor
         $userID = $this->getUserIDByUserName($userName);
         $targetUserID = $this->getUserIDByUserName($targetUserName);
@@ -650,6 +683,55 @@ class DbOperations
         }
     }
 
+    public function getCategoryProfile($userName, $categoryId){
+        $userID = $this->getUserIDByUserName($userName);
+        $stmtCategory = $this->con->prepare("SELECT * FROM category_view WHERE CategoryId = ?");
+        $stmtCategory->execute(array($categoryId));
+        $profile = array();
+        $category = array();
+
+        $rowCategory = $stmtCategory->fetch(PDO::FETCH_OBJ);
+        @$category['id'] = $rowCategory->CategoryID;
+        @$category['name'] = $rowCategory->CategoryName;
+        @$category['image'] = $rowCategory->CategoryImage;
+        @$category['about'] = $rowCategory->CategoryName . " About Eklenecek"; //Todo eklenecek
+        @$category['follow'] = "0";
+        @$category['follower'] = $this->getCategoryFollowerCount($rowCategory->CategoryID);
+        @$category['isfollow'] = $this->isUserFollowingCategory($userID, $categoryId);
+        //MiniPost
+        $categoryFinalID = $this->getCategoryFinalIDByCategoryID($categoryId);
+        $stmtPost = $this->con->prepare("SELECT * FROM post_view WHERE CategoryFinalID = ? ORDER BY PostDate DESC");
+        $stmtPost->execute(array($categoryFinalID));
+        $posts = array();
+        $options = array();
+        while ($rowPost = $stmtPost->fetch(PDO::FETCH_OBJ)) {
+            $post = array();
+            $post['id'] = $rowPost->PostID; //ID Çekildi
+            $post['question'] = $rowPost->PostQuestion; //Question Çekildi
+            //**En çok oylanan option çekildi */
+            $options = $this->getMostVotedOptionByPostID($rowPost->PostID);
+            $post['option'] = $options;
+            //**En çok oylanan option çekildi */
+            $post['date'] = $rowPost->PostDate; //Date Çekildi
+            $post['username'] = $rowPost->UserName;
+            $post['userid'] = $rowPost->UserID;
+            //Image
+            $image = @$rowPost->UserImagePath;
+            if($image !== null){
+                $site_url = 'https://gulfilosu.com';
+                $image = $site_url . @$rowPost->UserImagePath;
+            }
+            $post['image'] = $image;
+            $post['votecount'] = $this->getVoteCount($rowPost->PostID);
+            $post['commentcount'] = $this->getCommentCount($rowPost->PostID);
+            $post['likecount'] = $this->getPostLikeCount($rowPost->PostID);
+            array_push($posts, $post);
+        }
+        $profile['category'] = $category;
+        $profile['miniPost'] = $posts;
+        return $profile;
+    }
+
     public function getProfile($userName, $targetUser){ //userId = Takip eden, FollowId = Takip edilen //Adamın takipçileri FollowId ile bulunuyor //Adamın takip ettikleri UserId ile bulunuyor
         $userID = $this->getUserIDByUserName($userName);
         $targetUserID = $this->getUserIDByUserName($targetUser);
@@ -664,6 +746,7 @@ class DbOperations
         @$user['about'] = $rowUser->UserAbout;
         @$user['firstName'] = $rowUser->UserFirstName;
         @$user['lastName'] = $rowUser->UserLastName;
+        @$user['email'] = $rowUser->UserEmail;
 
         //TotalLike
         $stmtTotalLike = $this->con->prepare("SELECT TotalLike FROM post_like_view WHERE UserID = ?");
@@ -744,6 +827,35 @@ class DbOperations
             return false;
         }
     } //Updated
+
+    public function getUserCategory($locale, $userName){
+        $userId = $this->getUserIDByUserName($userName);
+        $stmt = $this->con->prepare("SELECT * FROM category_view WHERE CategoryLocale = ?");
+        $stmt->execute(array($locale));
+        $categories = array();
+        while ($row = $stmt->fetch(PDO::FETCH_OBJ)) {
+            $category = array();
+            $category['id'] = $row->CategoryID;
+            $category['name'] = $row->CategoryName;
+            $category['image'] = $row->CategoryImage;
+            $category['isfollow'] = $this->isUserFollowingCategory($userId, $row->CategoryID);
+            array_push($categories, $category);
+        }
+        if ($categories == null) {
+            $stmt = $this->con->prepare("SELECT * FROM category_view WHERE CategoryLocale = 'English' ");
+            $stmt->execute();
+            $categories = array();
+            while ($row = $stmt->fetch(PDO::FETCH_OBJ)) {
+                $category = array();
+                $category['id'] = $row->CategoryID;
+                $category['name'] = $row->CategoryName;
+                $category['image'] = $row->CategoryImage;
+                $category['isfollow'] = $this->isUserFollowingCategory($userId, $row->CategoryID);
+                array_push($categories, $category);
+            }
+        }
+        return $categories;
+    }
 
     public function getCategory($locale){
         $stmt = $this->con->prepare("SELECT * FROM category_view WHERE CategoryLocale = ?");
@@ -915,7 +1027,7 @@ class DbOperations
             $post['id'] = $rowPost->PostID;
             $post['question'] = $rowPost->PostQuestion;
             $post['description'] = $rowPost->PostDescription;
-            $post['categoryid'] = $rowPost->CategoryId;
+            $post['category'] = $rowPost->CategoryName;
             $options = $this->getOptionsByPostID2($rowPost->PostID, $userName);
             $post['option'] = $options;
             $post['date'] = $rowPost->PostDate;
@@ -962,8 +1074,10 @@ class DbOperations
             $post['id'] = $rowPost->PostID;
             $post['question'] = $rowPost->PostQuestion;
             $post['description'] = $rowPost->PostDescription;
+            //Options
             $options = $this->getOptionsByPostIDForPost2($rowPost->PostID, $userName);
             $post['option'] = $options;
+            $post['category']= $rowPost->CategoryName;
             $post['date'] = $rowPost->PostDate;
             $post['username'] = $rowPost->UserName;
             $post['userid'] = $rowPost->UserID;
@@ -1370,6 +1484,17 @@ class DbOperations
         return $row->CategoryID;
     } //Updated
 
+    public function isCategoryExist($categoryId){
+        $stmt = $this->con->prepare("SELECT COUNT(CategoryID) AS 'Count' FROM category_view WHERE CategoryID = ?");
+        $stmt ->execute(array($categoryId));
+        $row = $stmt->fetch(PDO::FETCH_OBJ);
+        if(@$row->Count > 0){
+            return true;
+        }else{
+            return false;
+        }
+}
+
     public function isUserExist($user){ //UserName or UserEmail
             $stmt = $this->con->prepare("SELECT UserID FROM user WHERE UserEmail = ? OR UserName = ?");
             $stmt ->execute(array($user, $user));
@@ -1421,6 +1546,17 @@ class DbOperations
         return @$row->TotalLike;
     } 
 
+    public function isUserFollowingCategory($userId, $categoryId){
+        $stmt = $this->con->prepare("SELECT COUNT(*) AS 'Count' FROM `user_category` WHERE UserId = ? AND CategoryId = ?");
+        $stmt ->execute(array($userId, $categoryId));
+        $row = $stmt->fetch(PDO::FETCH_OBJ);
+        if(@$row->Count > 0){ //Takip Ediyor
+            return true;
+        }else{ //Etmiyor
+            return false;
+        }
+    }
+
     public function isFollowing($userId, $targetUserId){
         $stmt = $this->con->prepare("SELECT COUNT(UserId) AS 'Count' FROM follower WHERE FollowID = ? AND UserId = ?");
         $stmt ->execute(array($targetUserId, $userId));
@@ -1430,6 +1566,14 @@ class DbOperations
         }else{ //Etmiyor
             return false;
         }
+    }
+
+    public function getCategoryFollowerCount($categoryId){
+        $sql = "SELECT COUNT(*) AS 'Count' FROM user_category WHERE CategoryId = ?";
+        $stmt = $this->con->prepare($sql);
+        $stmt->execute(array($categoryId));
+        $row = $stmt->fetch(PDO::FETCH_OBJ);
+        return @$row->Count;
     }
 
     public function getPostLikeCount($postID){

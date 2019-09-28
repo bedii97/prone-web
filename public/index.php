@@ -21,6 +21,248 @@ $token = bin2hex($token);
 //Code 203 = User Failure
 //Code 204 = No Content
 
+$app->post('/categoryunfollow', function (Request $request, Response $response) {
+    if (!haveEmptyParameters(array('UserName', 'UserPassword', 'CategoryId'), $request, $response)) {
+        $request_data = $request->getParsedBody();
+        $userName = $request_data['UserName'];
+        $userPassword = $request_data['UserPassword'];
+        $categoryId = $request_data['CategoryId'];
+        $db = new DbOperations;
+            $result = $db->userLogin($userName, $userPassword);
+            if ($result == USER_AUTHENTICATED) {
+                if ($db->isCategoryExist($categoryId)) {
+                    $followResult = $db->categoryUnFollow($userName, $categoryId);
+                    if ($followResult == UNFOLLOW_SUCCESS) {
+                        $response_data = array();
+                        $response_data['error'] = false;
+                        $response_data['message'] = 'Success';
+                        $response->write(json_encode($response_data));
+                        return $response
+                            ->withHeader('Content-type', 'application/json')
+                            ->withStatus(200);
+                    } else if ($followResult == UNFOLLOW_ERROR) {
+                        $response_data = array();
+                        $response_data['error'] = true;
+                        $response_data['message'] = 'Error';
+                        $response->write(json_encode($response_data));
+                        return $response
+                            ->withHeader('Content-type', 'application/json')
+                            ->withStatus(200);
+                    } else if ($followResult == ALREADY_UNFOLLOWING) {
+                        $response_data = array();
+                        $response_data['error'] = true;
+                        $response_data['message'] = 'Already Following';
+                        $response->write(json_encode($response_data));
+                        return $response
+                            ->withHeader('Content-type', 'application/json')
+                            ->withStatus(200);
+                    } else {
+                        $response_data = array();
+                        $response_data['error'] = true;
+                        $response_data['message'] = 'Unexpected Error';
+                        $response->write(json_encode($response_data));
+                        return $response
+                            ->withHeader('Content-type', 'application/json')
+                            ->withStatus(200);
+                    }
+                } else {
+                    $response_data = array();
+                    $response_data['error'] = true;
+                    $response_data['message'] = 'Category not exist';
+                    $response->write(json_encode($response_data));
+                    return $response
+                        ->withHeader('Content-type', 'application/json')
+                        ->withStatus(200);
+                }
+            } else if ($result == USER_NOT_FOUND) {
+                $response_data = array();
+                $response_data['error'] = true;
+                $response_data['message'] = 'User not exist';
+                $response->write(json_encode($response_data));
+                return $response
+                    ->withHeader('Content-type', 'application/json')
+                    ->withStatus(200);
+            } else if ($result == USER_PASSWORD_DO_NOT_MATCH) {
+                $response_data = array();
+                $response_data['error'] = true;
+                $response_data['message'] = 'Invalid credential';
+                $response->write(json_encode($response_data));
+                return $response
+                    ->withHeader('Content-type', 'application/json')
+                    ->withStatus(200);
+            }
+    }
+
+    return $response
+        ->withHeader('Content-type', 'application/json')
+        ->withStatus(200);
+}); //Follow Category
+
+$app->post('/categoryfollow', function (Request $request, Response $response) {
+    if (!haveEmptyParameters(array('UserName', 'UserPassword', 'CategoryId'), $request, $response)) {
+        $request_data = $request->getParsedBody();
+        $userName = $request_data['UserName'];
+        $userPassword = $request_data['UserPassword'];
+        $categoryId = $request_data['CategoryId'];
+        $db = new DbOperations;
+            $result = $db->userLogin($userName, $userPassword);
+            if ($result == USER_AUTHENTICATED) {
+                if ($db->isCategoryExist($categoryId)) {
+                    $followResult = $db->categoryFollow($userName, $categoryId);
+                    if ($followResult == FOLLOW_SUCCESS) {
+                        $response_data = array();
+                        $response_data['error'] = false;
+                        $response_data['message'] = 'Success';
+                        $response->write(json_encode($response_data));
+                        return $response
+                            ->withHeader('Content-type', 'application/json')
+                            ->withStatus(200);
+                    } else if ($followResult == FOLLOW_ERROR) {
+                        $response_data = array();
+                        $response_data['error'] = true;
+                        $response_data['message'] = 'Error';
+                        $response->write(json_encode($response_data));
+                        return $response
+                            ->withHeader('Content-type', 'application/json')
+                            ->withStatus(200);
+                    } else if ($followResult == ALREADY_FOLLOWING) {
+                        $response_data = array();
+                        $response_data['error'] = true;
+                        $response_data['message'] = 'Already Following';
+                        $response->write(json_encode($response_data));
+                        return $response
+                            ->withHeader('Content-type', 'application/json')
+                            ->withStatus(200);
+                    } else {
+                        $response_data = array();
+                        $response_data['error'] = true;
+                        $response_data['message'] = 'Unexpected Error';
+                        $response->write(json_encode($response_data));
+                        return $response
+                            ->withHeader('Content-type', 'application/json')
+                            ->withStatus(200);
+                    }
+                } else {
+                    $response_data = array();
+                    $response_data['error'] = true;
+                    $response_data['message'] = 'Category not exist';
+                    $response->write(json_encode($response_data));
+                    return $response
+                        ->withHeader('Content-type', 'application/json')
+                        ->withStatus(200);
+                }
+            } else if ($result == USER_NOT_FOUND) {
+                $response_data = array();
+                $response_data['error'] = true;
+                $response_data['message'] = 'User not exist';
+                $response->write(json_encode($response_data));
+                return $response
+                    ->withHeader('Content-type', 'application/json')
+                    ->withStatus(200);
+            } else if ($result == USER_PASSWORD_DO_NOT_MATCH) {
+                $response_data = array();
+                $response_data['error'] = true;
+                $response_data['message'] = 'Invalid credential';
+                $response->write(json_encode($response_data));
+                return $response
+                    ->withHeader('Content-type', 'application/json')
+                    ->withStatus(200);
+            }
+    }
+
+    return $response
+        ->withHeader('Content-type', 'application/json')
+        ->withStatus(200);
+}); //Follow Category
+
+$app->post('/categoryuser', function (Request $request, Response $response) {
+    if (!haveEmptyParameters(array('UserName', 'UserPassword', 'Locale'), $request, $response)) {
+        $request_data = $request->getParsedBody();
+        $userName = $request_data['UserName'];
+        $userPassword = $request_data['UserPassword'];
+        $locale = $request_data['Locale'];
+        $db = new DbOperations;
+        $result = $db->userLogin($userName, $userPassword);
+        if($result == USER_AUTHENTICATED){
+            $categories = $db->getUserCategory($locale, $userName);
+            $response_data = array();
+            $response_data['error'] = false;
+            $response_data['category'] = $categories;
+            $response->write(json_encode($response_data));
+            return $response
+            ->withHeader('Content-type', 'application/json')
+            ->withStatus(200);
+        }else if ($result == USER_NOT_FOUND) {
+            $response_data = array();
+            $response_data['error'] = true;
+            $response_data['message'] = 'User not exist';
+            $response->write(json_encode($response_data));
+            return $response
+                ->withHeader('Content-type', 'application/json')
+                ->withStatus(200);
+        } else if ($result == USER_PASSWORD_DO_NOT_MATCH) {
+            $response_data = array();
+            $response_data['error'] = true;
+            $response_data['message'] = 'Invalid credential';
+            $response->write(json_encode($response_data));
+            return $response
+                ->withHeader('Content-type', 'application/json')
+                ->withStatus(200);
+        }
+    }
+    return $response
+        ->withHeader('Content-type', 'application/json')
+        ->withStatus(400);
+}); //Get User's Categories
+
+$app->post('/categoryprofile', function (Request $request, Response $response) {
+    if (!haveEmptyParameters(array('UserName', 'UserPassword', 'CategoryId'), $request, $response)) {
+        $request_data = $request->getParsedBody();
+        $username = $request_data['UserName'];
+        $userpassword = $request_data['UserPassword'];
+        $categoryId = $request_data['CategoryId'];
+        $db = new DbOperations;
+        $result = $db->userLogin($username, $userpassword);
+        if ($result == USER_AUTHENTICATED) {
+            if ($db->isCategoryExist($categoryId)) {
+                $response_data = array();
+                $response_data = $db->getCategoryProfile($username, $categoryId);
+                $response->write(json_encode($response_data));
+                return $response
+                    ->withHeader('Content-type', 'application/json')
+                    ->withStatus(200);
+            } else {
+                $response_data = array();
+                $response_data['error'] = true;
+                $response_data['message'] = 'User not exist';
+                $response->write(json_encode($response_data));
+                return $response
+                    ->withHeader('Content-type', 'application/json')
+                    ->withStatus(200);
+            }
+        } else if ($result == USER_NOT_FOUND) {
+            $response_data = array();
+            $response_data['error'] = true;
+            $response_data['message'] = 'User not exist';
+            $response->write(json_encode($response_data));
+            return $response
+                ->withHeader('Content-type', 'application/json')
+                ->withStatus(200);
+        } else if ($result == USER_PASSWORD_DO_NOT_MATCH) {
+            $response_data = array();
+            $response_data['error'] = true;
+            $response_data['message'] = 'Invalid credential';
+            $response->write(json_encode($response_data));
+            return $response
+                ->withHeader('Content-type', 'application/json')
+                ->withStatus(200);
+        }
+    }
+    return $response
+        ->withHeader('Content-type', 'application/json')
+        ->withStatus(400);
+}); //Get Category Profile
+
 $app->post('/deleteusertoken', function (Request $request, Response $response) {
     if (!haveEmptyParameters(array('UserName', 'UserPassword', 'Token'), $request, $response)) {
         $request_data = $request->getParsedBody();
@@ -925,7 +1167,7 @@ $app->post('/reply', function (Request $request, Response $response) {
     return $response
         ->withHeader('Content-type', 'application/json')
         ->withStatus(400);
-}); //Add Comment
+}); //Add Reply
 
 $app->post('/replyunlike', function (Request $request, Response $response) {
     if (!haveEmptyParameters(array('UserName', 'UserPassword', 'ReplyId'), $request, $response)) {
@@ -1682,7 +1924,7 @@ $app->post('/category', function (Request $request, Response $response) {
     return $response
         ->withHeader('Content-type', 'application/json')
         ->withStatus(400);
-}); //Updated
+}); //Det Default Categories
 
 $app->post('/userpost', function (Request $request, Response $response) {
 
