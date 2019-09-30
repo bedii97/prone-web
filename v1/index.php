@@ -4,8 +4,8 @@ use \Psr\Http\Message\ServerRequestInterface as Request;
 use \Psr\Http\Message\ResponseInterface as Response;
 
 require '../vendor/autoload.php';
-require '../includes/DbOperations.php';
-require '../includes/PushNotification.php';
+require '../includesV1/DbOperations.php';
+require '../includesV1/PushNotification.php';
 
 $app = new \Slim\App([
     'settings' => [
@@ -20,6 +20,110 @@ $token = bin2hex($token);
 
 //Code 203 = User Failure
 //Code 204 = No Content
+
+$app->post('/getcommentlikes', function (Request $request, Response $response) {
+    if (!haveEmptyParameters(array('UserName', 'UserPassword', 'CommentId'), $request, $response)) {
+        $request_data = $request->getParsedBody();
+        $userName = $request_data['UserName'];
+        $userPassword = $request_data['UserPassword'];
+        $commentId = $request_data['CommentId'];
+        $db = new DbOperations;
+            $result = $db->userLogin($userName, $userPassword);
+            if ($result == USER_AUTHENTICATED) {
+                $commentStatus = $db->isCommentExist($commentId);
+                if ($commentStatus) {
+                    $commentLikes = $db->getCommentLikeUserList($commentId, $userName);
+                    $response_data = array();
+                        $response_data['error'] = false;
+                        $response_data['likedUsers'] = $commentLikes;
+                        $response->write(json_encode($response_data));
+                        return $response
+                            ->withHeader('Content-type', 'application/json')
+                            ->withStatus(200);
+                } else {
+                    $response_data = array();
+                    $response_data['error'] = true;
+                    $response_data['message'] = 'Comment not exist';
+                    $response->write(json_encode($response_data));
+                    return $response
+                        ->withHeader('Content-type', 'application/json')
+                        ->withStatus(200);
+                }
+            } else if ($result == USER_NOT_FOUND) {
+                $response_data = array();
+                $response_data['error'] = true;
+                $response_data['message'] = 'User not exist';
+                $response->write(json_encode($response_data));
+                return $response
+                    ->withHeader('Content-type', 'application/json')
+                    ->withStatus(200);
+            } else if ($result == USER_PASSWORD_DO_NOT_MATCH) {
+                $response_data = array();
+                $response_data['error'] = true;
+                $response_data['message'] = 'Invalid credential';
+                $response->write(json_encode($response_data));
+                return $response
+                    ->withHeader('Content-type', 'application/json')
+                    ->withStatus(200);
+            }
+    }
+
+    return $response
+        ->withHeader('Content-type', 'application/json')
+        ->withStatus(200);
+}); //Follow Category
+
+$app->post('/getpostlikes', function (Request $request, Response $response) {
+    if (!haveEmptyParameters(array('UserName', 'UserPassword', 'PostId'), $request, $response)) {
+        $request_data = $request->getParsedBody();
+        $userName = $request_data['UserName'];
+        $userPassword = $request_data['UserPassword'];
+        $postId = $request_data['PostId'];
+        $db = new DbOperations;
+            $result = $db->userLogin($userName, $userPassword);
+            if ($result == USER_AUTHENTICATED) {
+                $postStatus = $db->checkPostStatus($postId);
+                if ($postStatus == "Active") {
+                    $postLikes = $db->getPostLikeUserList($postId, $userName);
+                    $response_data = array();
+                        $response_data['error'] = false;
+                        $response_data['likedUsers'] = $postLikes;
+                        $response->write(json_encode($response_data));
+                        return $response
+                            ->withHeader('Content-type', 'application/json')
+                            ->withStatus(200);
+                } else {
+                    $response_data = array();
+                    $response_data['error'] = true;
+                    $response_data['message'] = 'Post not exist';
+                    $response->write(json_encode($response_data));
+                    return $response
+                        ->withHeader('Content-type', 'application/json')
+                        ->withStatus(200);
+                }
+            } else if ($result == USER_NOT_FOUND) {
+                $response_data = array();
+                $response_data['error'] = true;
+                $response_data['message'] = 'User not exist';
+                $response->write(json_encode($response_data));
+                return $response
+                    ->withHeader('Content-type', 'application/json')
+                    ->withStatus(200);
+            } else if ($result == USER_PASSWORD_DO_NOT_MATCH) {
+                $response_data = array();
+                $response_data['error'] = true;
+                $response_data['message'] = 'Invalid credential';
+                $response->write(json_encode($response_data));
+                return $response
+                    ->withHeader('Content-type', 'application/json')
+                    ->withStatus(200);
+            }
+    }
+
+    return $response
+        ->withHeader('Content-type', 'application/json')
+        ->withStatus(200);
+}); //Follow Category
 
 $app->post('/categoryunfollow', function (Request $request, Response $response) {
     if (!haveEmptyParameters(array('UserName', 'UserPassword', 'CategoryId'), $request, $response)) {
@@ -737,17 +841,7 @@ $app->post('/postreport', function (Request $request, Response $response) {
 $app->post('/denmark', function (Request $request, Response $response) {
     $request_data = $request->getParsedBody();
     $denmark = $request_data['denmark'];
-    //$db = new DbOperations;
-    date_default_timezone_set('Europe/Istanbul');
-    $lastDate = date_create($denmark);
-    $nowDate = date_create(date('Y-m-d H:i:s'));
-    $addTime = '1 days';
-    date_add($lastDate, date_interval_create_from_date_string($addTime));
-    if($lastDate < $nowDate){
-        $cikti = "addedTime < nowDate";
-    }else{
-        $cikti = "else";
-    }
+    $cikti = trim($denmark);
     $response_data['denmark'] = $cikti;
     $response->write(json_encode($response_data));
     return $response
@@ -1767,13 +1861,14 @@ $app->post('/addpost', function (Request $request, Response $response) {
 
         $userName = $request_data['UserName'];
         $userPassword = $request_data['UserPassword'];
-        $question = $request_data['Question'];
-        $description = $request_data['Description'];
+        $question = trim($request_data['Question']);
+        $description = trim($request_data['Description']);
         $categoryIDRaw = $request_data['CategoryID'];
         $explodedCategoryID = explode(",", $categoryIDRaw);
         $categoryID = array_filter($explodedCategoryID);
         @$options_raw = $request_data['Options'];
         @$options = array_filter($options_raw); //Empty array elemanlarını siliyor
+        $options = array_map('trim', $options);
 
         $db = new DbOperations;
         $result = $db->userLogin($userName, $userPassword);

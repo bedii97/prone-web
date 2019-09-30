@@ -12,6 +12,56 @@ class DbOperations
         $this->con = $db->connect();
     }
 
+    public function getCommentLikeUserList($commentId, $userName){
+        $userId = $this->getUserIDByUserName($userName);
+        $sql = "SELECT * FROM comment_like_user_view WHERE CommentID = ?";
+        $stmt = $this->con->prepare($sql);
+        $stmt->execute(array($commentId));
+        $likedUsers = array();
+        while ($row = $stmt->fetch(PDO::FETCH_OBJ)) {
+            $likedUser = array();
+            $likedUser['id'] = $row->UserId;
+            $likedUser['name'] = $row->UserName;
+            $likedUser['firstname'] = $row->UserFirstName;
+            $likedUser['lastname'] = $row->UserLastName;
+            $likedUser['isfollow'] = $this->isFollowing($userId, $row->UserId);
+            //Image
+            $image = @$row->UserImagePath;
+            if($image !== null){
+                $site_url = 'https://gulfilosu.com';
+                $image = $site_url . @$row->UserImagePath;
+            }
+            $likedUser['image'] = $image;
+            array_push($likedUsers, $likedUser);
+        }
+        return $likedUsers;
+    }
+
+    public function getPostLikeUserList($postId, $userName){
+        $userId = $this->getUserIDByUserName($userName);
+        $sql = "SELECT * FROM post_like_user_view WHERE PostID = ?";
+        $stmt = $this->con->prepare($sql);
+        $stmt->execute(array($postId));
+        $likedUsers = array();
+        while ($row = $stmt->fetch(PDO::FETCH_OBJ)) {
+            $likedUser = array();
+            $likedUser['id'] = $row->UserId;
+            $likedUser['name'] = $row->UserName;
+            $likedUser['firstname'] = $row->UserFirstName;
+            $likedUser['lastname'] = $row->UserLastName;
+            $likedUser['isfollow'] = $this->isFollowing($userId, $row->UserId);
+            //Image
+            $image = @$row->UserImagePath;
+            if($image !== null){
+                $site_url = 'https://gulfilosu.com';
+                $image = $site_url . @$row->UserImagePath;
+            }
+            $likedUser['image'] = $image;
+            array_push($likedUsers, $likedUser);
+        }
+        return $likedUsers;
+    }
+
     public function replyReport($userName, $replyId, $categoryId, $content){
         $userId = $this->getUserIDByUserName($userName);
         if($this->checkCanUserReportReply($replyId, $userId)){
@@ -693,7 +743,6 @@ class DbOperations
         @$category['id'] = $rowCategory->CategoryID;
         @$category['name'] = $rowCategory->CategoryName;
         @$category['image'] = $rowCategory->CategoryImage;
-        @$category['about'] = $rowCategory->CategoryName . " About Eklenecek"; //Todo eklenecek
         @$category['follow'] = "0";
         @$category['follower'] = $this->getCategoryFollowerCount($rowCategory->CategoryID);
         @$category['isfollow'] = $this->isUserFollowingCategory($userID, $categoryId);
@@ -712,6 +761,7 @@ class DbOperations
             $post['option'] = $options;
             //**En çok oylanan option çekildi */
             $post['date'] = $rowPost->PostDate; //Date Çekildi
+            $post['category'] = $rowCategory->CategoryName; //RowCategory'den geliyor bu veri
             $post['username'] = $rowPost->UserName;
             $post['userid'] = $rowPost->UserID;
             //Image
@@ -1505,7 +1555,7 @@ class DbOperations
         }else{
             return false;
         }
-}
+    }
 
     public function isUserExist($user){ //UserName or UserEmail
             $stmt = $this->con->prepare("SELECT UserID FROM user WHERE UserEmail = ? OR UserName = ?");
@@ -1874,6 +1924,15 @@ class DbOperations
             return true;
         }
     } //Updated
+
+    public function checkPostStatus($postID){
+        $sql = "SELECT PostStatus FROM post WHERE PostId = ?";
+        $stmt = $this->con->prepare($sql);
+        $stmt->execute(array($postID));
+        $row = $stmt->fetch(PDO::FETCH_OBJ);
+        $postStatus = @$row->PostStatus;
+        return $postStatus;
+    }
 
     public function isPostDeleted($postID){
         $sql = "SELECT PostStatus FROM post WHERE PostId = ?";
