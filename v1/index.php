@@ -21,6 +21,128 @@ $token = bin2hex($token);
 //Code 203 = User Failure
 //Code 204 = No Content
 
+$app->post('/commentdetails/{id}', function (Request $request, Response $response, array $args) {
+    if (!haveEmptyParameters(array('UserName', 'UserPassword'), $request, $response)) {
+        $request_data = $request->getParsedBody();
+        $userName = $request_data['UserName'];
+        $userPassword = $request_data['UserPassword'];
+        $commentID = $args['id'];
+        $db = new DbOperations;
+        $result = $db->userLogin($userName, $userPassword);
+        if ($result == USER_AUTHENTICATED) {
+            $commentStatus = $db->isCommentExist($commentID);
+            if($commentStatus){
+                $comment = $db->commentDetails($commentID, $userName);
+                if ($comment == null) {
+                    $response_data = array();
+                    $response_data['error'] = true;
+                    $response_data['comment'] = $comment;
+                    $response->write(json_encode($response_data));
+                    return $response
+                        ->withHeader('Content-type', 'application/json')
+                         ->withStatus(200);
+                } else { //İstenilen post varsa
+                    $response_data = array();
+                    $response_data['error'] = false;
+                    $response_data['comment'] = $comment;
+                    $response->write(json_encode($response_data));
+                    return $response
+                        ->withHeader('Content-type', 'application/json')
+                        ->withStatus(200);
+                }
+            }else{
+                $response_data = array();
+                $response_data['error'] = true;
+                $response_data['message'] = "Comment not exist";
+                $response->write(json_encode($response_data));
+                return $response
+                    ->withHeader('Content-type', 'application/json')
+                    ->withStatus(200);
+            }
+        } else if ($result == USER_NOT_FOUND) {
+            $response_data = array();
+            $response_data['error'] = true;
+            $response_data['message'] = 'User not exist';
+            $response->write(json_encode($response_data));
+            return $response
+                ->withHeader('Content-type', 'application/json')
+                ->withStatus(200);
+        } else if ($result == USER_PASSWORD_DO_NOT_MATCH) {
+            $response_data = array();
+            $response_data['error'] = true;
+            $response_data['message'] = 'Invalid credential';
+            $response->write(json_encode($response_data));
+            return $response
+                ->withHeader('Content-type', 'application/json')
+                ->withStatus(200);
+        }
+    }
+}); //Get Post Details
+
+$app->post('/denmark', function (Request $request, Response $response) {
+    $request_data = $request->getParsedBody();
+    $denmark = $request_data['denmark'];
+    $db = new DbOperations;
+    $cikti = $db->isUserLikedComment(3, $denmark);
+    $response_data['denmark'] = $cikti;
+    $response->write(json_encode($response_data));
+    return $response
+        ->withHeader('Content-type', 'application/json')
+        ->withStatus(200);
+}); //Get Posts
+
+$app->post('/getoptionvotes', function (Request $request, Response $response) {
+    if (!haveEmptyParameters(array('UserName', 'UserPassword', 'OptionId'), $request, $response)) {
+        $request_data = $request->getParsedBody();
+        $userName = $request_data['UserName'];
+        $userPassword = $request_data['UserPassword'];
+        $optionId = $request_data['OptionId'];
+        $db = new DbOperations;
+            $result = $db->userLogin($userName, $userPassword);
+            if ($result == USER_AUTHENTICATED) {
+                $optionStatus = $db->checkOptionAvailable($optionId);
+                if ($optionStatus) {
+                    $commentLikes = $db->getOptionVoteUserList($optionId, $userName);
+                    $response_data = array();
+                        $response_data['error'] = false;
+                        $response_data['likedUsers'] = $commentLikes;
+                        $response->write(json_encode($response_data));
+                        return $response
+                            ->withHeader('Content-type', 'application/json')
+                            ->withStatus(200);
+                } else {
+                    $response_data = array();
+                    $response_data['error'] = true;
+                    $response_data['message'] = 'Option not exist';
+                    $response->write(json_encode($response_data));
+                    return $response
+                        ->withHeader('Content-type', 'application/json')
+                        ->withStatus(200);
+                }
+            } else if ($result == USER_NOT_FOUND) {
+                $response_data = array();
+                $response_data['error'] = true;
+                $response_data['message'] = 'User not exist';
+                $response->write(json_encode($response_data));
+                return $response
+                    ->withHeader('Content-type', 'application/json')
+                    ->withStatus(200);
+            } else if ($result == USER_PASSWORD_DO_NOT_MATCH) {
+                $response_data = array();
+                $response_data['error'] = true;
+                $response_data['message'] = 'Invalid credential';
+                $response->write(json_encode($response_data));
+                return $response
+                    ->withHeader('Content-type', 'application/json')
+                    ->withStatus(200);
+            }
+    }
+
+    return $response
+        ->withHeader('Content-type', 'application/json')
+        ->withStatus(200);
+}); //Get UserList of voters
+
 $app->post('/getcommentlikes', function (Request $request, Response $response) {
     if (!haveEmptyParameters(array('UserName', 'UserPassword', 'CommentId'), $request, $response)) {
         $request_data = $request->getParsedBody();
@@ -837,17 +959,6 @@ $app->post('/postreport', function (Request $request, Response $response) {
         ->withHeader('Content-type', 'application/json')
         ->withStatus(200);
 }); //Like Post
-
-$app->post('/denmark', function (Request $request, Response $response) {
-    $request_data = $request->getParsedBody();
-    $denmark = $request_data['denmark'];
-    $cikti = trim($denmark);
-    $response_data['denmark'] = $cikti;
-    $response->write(json_encode($response_data));
-    return $response
-        ->withHeader('Content-type', 'application/json')
-        ->withStatus(200);
-}); //Get Posts
 
 $app->post('/forgetpassword', function (Request $request, Response $response) {
     if(!haveEmptyParameters(array('UserName'), $request, $response)){
@@ -1869,40 +1980,49 @@ $app->post('/addpost', function (Request $request, Response $response) {
         @$options_raw = $request_data['Options'];
         @$options = array_filter($options_raw); //Empty array elemanlarını siliyor
         $options = array_map('trim', $options);
-
-        $db = new DbOperations;
-        $result = $db->userLogin($userName, $userPassword);
-        if ($result == USER_AUTHENTICATED) { //Giriş başarılıysa
-            $addPostResult = $db->addPost($userName, $question, $description, $options, $categoryID);
-            if ($addPostResult) { //Post işlemi başarılıysa
+        if(checkArrayItemLength($options, 150, 0)){
+            $db = new DbOperations;
+            $result = $db->userLogin($userName, $userPassword);
+            if ($result == USER_AUTHENTICATED) { //Giriş başarılıysa
+                $addPostResult = $db->addPost($userName, $question, $description, $options, $categoryID);
+                if ($addPostResult) { //Post işlemi başarılıysa
+                    $response_data = array();
+                    $response_data['error'] = false;
+                    $response_data['message'] = 'Successful';
+                    $response->write(json_encode($response_data));
+                    return $response
+                        ->withHeader('Content-type', 'application/json')
+                        ->withStatus(200);
+                } else { //Post ekleme işlemi başarısızsa
+                    $response_data = array();
+                    $response_data['error'] = true;
+                    $response_data['message'] = 'Error';
+                    $response->write(json_encode($response_data));
+                    return $response
+                        ->withHeader('Content-type', 'application/json')
+                        ->withStatus(200);
+                }
+            } else if ($result == USER_NOT_FOUND) {
                 $response_data = array();
-                $response_data['error'] = false;
-                $response_data['message'] = 'Successful';
+                $response_data['error'] = true;
+                $response_data['message'] = 'User not exist';
                 $response->write(json_encode($response_data));
                 return $response
                     ->withHeader('Content-type', 'application/json')
                     ->withStatus(200);
-            } else { //Post ekleme işlemi başarısızsa
+            } else if ($result == USER_PASSWORD_DO_NOT_MATCH) {
                 $response_data = array();
                 $response_data['error'] = true;
-                $response_data['message'] = 'Error';
+                $response_data['message'] = 'Invalid credential';
                 $response->write(json_encode($response_data));
                 return $response
                     ->withHeader('Content-type', 'application/json')
                     ->withStatus(200);
             }
-        } else if ($result == USER_NOT_FOUND) {
+        } else {
             $response_data = array();
             $response_data['error'] = true;
-            $response_data['message'] = 'User not exist';
-            $response->write(json_encode($response_data));
-            return $response
-                ->withHeader('Content-type', 'application/json')
-                ->withStatus(200);
-        } else if ($result == USER_PASSWORD_DO_NOT_MATCH) {
-            $response_data = array();
-            $response_data['error'] = true;
-            $response_data['message'] = 'Invalid credential';
+            $response_data['message'] = 'Invalid Option';
             $response->write(json_encode($response_data));
             return $response
                 ->withHeader('Content-type', 'application/json')
@@ -2672,6 +2792,15 @@ function haveEmptyParametersAndOptions($required_params, $request, $response, $o
         $response->write(json_encode($error_detail));
     }
     return $error;
+}
+
+function checkArrayItemLength($array, $max, $min){
+    foreach ($array as $item) {
+        if(strlen($item) < $min || strlen($item) > $max){
+            return false;
+        }
+    }
+    return true;
 }
 
 $app->run();

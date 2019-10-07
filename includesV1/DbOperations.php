@@ -12,6 +12,31 @@ class DbOperations
         $this->con = $db->connect();
     }
 
+    public function getOptionVoteUserList($optionId, $userName){
+        $userId = $this->getUserIDByUserName($userName);
+        $sql = "SELECT * FROM vote_user_view WHERE OptionId = ?";
+        $stmt = $this->con->prepare($sql);
+        $stmt->execute(array($optionId));
+        $votedUsers = array();
+        while ($row = $stmt->fetch(PDO::FETCH_OBJ)) {
+            $votedUser = array();
+            $votedUser['id'] = $row->UserId;
+            $votedUser['name'] = $row->UserName;
+            $votedUser['firstname'] = $row->UserFirstName;
+            $votedUser['lastname'] = $row->UserLastName;
+            $votedUser['isfollow'] = $this->isFollowing($userId, $row->UserId);
+            //Image
+            $image = @$row->UserImagePath;
+            if($image !== null){
+                $site_url = 'https://gulfilosu.com';
+                $image = $site_url . @$row->UserImagePath;
+            }
+            $votedUser['image'] = $image;
+            array_push($votedUsers, $votedUser);
+        }
+        return $votedUsers;
+    }
+
     public function getCommentLikeUserList($commentId, $userName){
         $userId = $this->getUserIDByUserName($userName);
         $sql = "SELECT * FROM comment_like_user_view WHERE CommentID = ?";
@@ -459,6 +484,11 @@ class DbOperations
                 $postTitle = $this->getPostTitleByPostID($postId);
                 $notify['postId'] = $postId;
                 $notify['question'] = $postTitle;
+            }else if($notify['type'] == "postVote"){
+                $postId = $this->getNotificationPostIdByNotificationIDForVote($rowNotify->NotificationID);
+                $postTitle = $this->getPostTitleByPostID($postId);
+                $notify['postId'] = $postId;
+                $notify['question'] = $postTitle;
             }
             array_push($notifies, $notify);
         }
@@ -507,6 +537,11 @@ class DbOperations
                 $stmt = $this->con->prepare("INSERT INTO comment_reply (UserId, CommentId, CommentReplyContent) VALUES (?, ?, ?)"); //3 Parametre
                 $stmt->execute(array($userID, $commentID, $reply));
                 if ($stmt) {
+                        $to = $this->getCommentOwnerUserName($commentID);
+                        if($userName != $to){
+                            $notify = new PushNotification;
+                            $notify->commentReplyNotification($userName, $to, $commentID);
+                        }
                     return COMMENT_SUCCESS;
                 } else {
                     return COMMENT_UNSUCCESS;
@@ -994,6 +1029,12 @@ class DbOperations
                     $stmt = $this->con->prepare("INSERT INTO vote (OptionId, UserId) VALUES (?, ?)"); //2 Parametre
                     $stmt->execute(array($optionID, $userID));
                     if ($stmt) {
+                        $to = $this->getPostOwnerUsernameByOptionID($optionID);
+                        if($userName != $to){
+                            $postId = $this->getPostIDByOptionID($optionID);
+                            $notify = new PushNotification;
+                            $notify->voteNotification($userName, $to, $postId);
+                        }
                         return OPTION_SUCCESS;
                     } else {
                         return OPTION_NOT_SUCCESS;
@@ -1063,6 +1104,31 @@ class DbOperations
             array_push($comments, $comment);
         }
         return $comments;
+    } //Updated
+
+    public function commentDetails($commentID, $userName){
+        $stmtComment = $this->con->prepare("SELECT * FROM comment_view WHERE CommentID = ?");
+        $stmtComment->execute(array($commentID));
+        while ($rowComment = $stmtComment->fetch(PDO::FETCH_OBJ)) {
+            $userId = $this->getUserIDByUserName($userName);
+            $comment = array();
+            $comment['id'] = $rowComment->CommentID;
+            $comment['content'] = $rowComment->CommentContent;
+            $comment['date'] = $rowComment->CommentDate;
+            $comment['likecount'] = $this->getCommentLikeCount($commentID);
+            $comment['replycount'] = $this->getReplyCount($commentID);
+            $comment['username'] = $rowComment->UserName;
+            //Image
+            $image = @$rowComment->UserImagePath;
+            if($image !== null){
+                $site_url = 'https://gulfilosu.com';
+                $image = $site_url . @$rowComment->UserImagePath;
+            }
+            $comment['image'] = $image;
+            $comment['liked'] = $this->isUserLikedComment($userId, $rowComment->CommentID);
+            $comment['postId'] = $rowComment->PostID;
+        }
+        return $comment;
     } //Updated
 
     public function postDetails($postID, $userName, $locale){
@@ -1580,7 +1646,7 @@ class DbOperations
     }
 
     public function isCommentExist($commentId){ //UserName or UserEmail
-        $stmt = $this->con->prepare("SELECT CommentID FROM comment WHERE CommentID = ?");
+        $stmt = $this->con->prepare("SELECT CommentID FROM comment WHERE CommentID = ? AND CommentStatus = 1");
         $stmt ->execute(array($commentId));
         $row = $stmt->fetch(PDO::FETCH_OBJ);
         if(@$row->CommentID > 0){
@@ -1739,6 +1805,14 @@ class DbOperations
         return @$row->UserID;
     } //Updated
 
+    public function getCommentOwnerUserName($commentId){
+        $sql = "SELECT UserName FROM comment_view WHERE CommentID = ?";
+        $stmt = $this->con->prepare($sql);
+        $stmt->execute(array($commentId));
+        $row = $stmt->fetch(PDO::FETCH_OBJ);
+        return @$row->UserName;
+    } //Updated
+
     public function getCommentOwnerUserID($commentId){
         $sql = "SELECT UserID FROM comment_view WHERE CommentID = ?";
         $stmt = $this->con->prepare($sql);
@@ -1759,12 +1833,28 @@ class DbOperations
         return @$row->UserID;
     } //Updated
 
+    public function getPostOwnerUsernameByOptionID($optionID){
+        $sql = "SELECT user.UserName FROM user WHERE user.UserID = (SELECT post.UserId FROM post WHERE post.PostID = (SELECT option2_view.PostID FROM option2_view WHERE option2_view.OptionID = ?))";
+        $stmt = $this->con->prepare($sql);
+        $stmt->execute(array($optionID));
+        $row = $stmt->fetch(PDO::FETCH_OBJ);
+        return @$row->UserName;
+    } //Updated
+
     public function getPostOwnerUsername($postID){
         $sql = "SELECT UserName FROM post_view WHERE PostId = ?";
         $stmt = $this->con->prepare($sql);
         $stmt->execute(array($postID));
         $row = $stmt->fetch(PDO::FETCH_OBJ);
         return @$row->UserName;
+    } //Updated
+
+    public function getNotificationPostIdByNotificationIDForVote($notificationID){
+        $sql = "SELECT PostId FROM notification_vote_view WHERE NotificationId = ?";
+        $stmt = $this->con->prepare($sql);
+        $stmt->execute(array($notificationID));
+        $row = $stmt->fetch(PDO::FETCH_OBJ);
+        return @$row->PostId;
     } //Updated
 
     public function getNotificationPostIdByNotificationIDForComment($notificationID){

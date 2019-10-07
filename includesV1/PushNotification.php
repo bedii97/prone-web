@@ -58,6 +58,92 @@ class PushNotification{
         return $tokens;
     }
 
+    public function commentReplyNotification($from, $to, $commentId){
+        $db = new DbOperations;
+        $fromID = $db->getUserIDByUserName($from);
+        $toID = $db->getUserIDByUserName($to);
+        $type = "commentReply";
+        $tokens = $this->getTargetUserTokens($to);
+        $message = array(
+            "type" => $type,
+            "sender" => $from,
+            "commentId" => $commentId
+        );
+        $lastDate = date_create($this->commentRepyLastDate($fromID, $toID, $commentId));
+        $nowDate = date_create(date('Y-m-d H:i:s'));
+        $addTime = '1 days';
+        date_add($lastDate, date_interval_create_from_date_string($addTime));
+        //2019-09-17 13:03:32 gelen değer
+        //2019-09-18 13:03:32 +1 değer
+        //2019-09-17 13:03:32 şuan
+
+        if($lastDate < $nowDate){ //Küçükse notification işlemini başlat
+            $stmtNotification = $this->con->prepare("INSERT INTO `notification`(`NotificationType`, `NotificationSenderId`, `UserId`) VALUES (?, ?, ?)");
+            $result = $stmtNotification->execute(array($type, $fromID, $toID));
+            if($result){
+                $notificationID = $this->con->lastInsertId(); 
+                $stmtPostlike = $this->con->prepare("INSERT INTO `notification_commentreply`(`CommentId`, `NotificationId`) VALUES (?, ?)");
+                $stmtPostlike->execute(array($commentId, $notificationID));
+            }
+        }
+
+        $message_status = $this->sendNotification($tokens, $message);
+        $response = array(
+            "stmt" => $result,
+            "push" => $message_status
+        );
+        return $response;
+    }
+
+    public function commentRepyLastDate($fromID, $toID, $commentId){
+        $sql = "SELECT NotificationDate FROM notification_commentreply_view WHERE NotificationSenderId = ? AND UserId = ? AND CommentId = ? ORDER BY NotificationDate DESC LIMIT 1";
+        $stmt = $this->con->prepare($sql);
+        $stmt->execute(array($fromID, $toID, $commentId));
+        $row = $stmt->fetch(PDO::FETCH_OBJ);
+        $date = @$row->NotificationDate;
+        if($date == null){
+            return date_create("2000-01-01 00:00:00");
+        }else{
+            return $date;
+        }
+    }
+
+    public function voteNotification($from, $to, $postId){ //$from - UserName -- $to - UserName
+        $db = new DbOperations;
+        $fromID = $db->getUserIDByUserName($from);
+        $toID = $db->getUserIDByUserName($to);
+        $type = "postVote";
+        $tokens = $this->getTargetUserTokens($to);
+        $message = array(
+            "type" => $type,
+            "sender" => $from,
+            "postId" => $postId
+        );
+        $lastDate = date_create($this->postLikeLastDate($fromID, $toID, $postId));
+        $nowDate = date_create(date('Y-m-d H:i:s'));
+        $addTime = '1 days';
+        date_add($lastDate, date_interval_create_from_date_string($addTime));
+        //2019-09-17 13:03:32 gelen değer
+        //2019-09-18 13:03:32 +1 değer
+        //2019-09-17 13:03:32 şuan
+
+        if($lastDate < $nowDate){ //Küçükse notification işlemini başlat
+            $stmtNotification = $this->con->prepare("INSERT INTO `notification`(`NotificationType`, `NotificationSenderId`, `UserId`) VALUES (?, ?, ?)");
+            $result = $stmtNotification->execute(array($type, $fromID, $toID));
+            if($result){
+                $notificationID = $this->con->lastInsertId(); 
+                $stmtVote = $this->con->prepare("INSERT INTO `notification_vote`(`PostId`, `NotificationId`) VALUES (?, ?)");
+                $stmtVote->execute(array($postId, $notificationID));
+            }
+        }
+        $message_status = $this->sendNotification($tokens, $message);
+        $response = array(
+            "stmt" => $result,
+            "push" => $message_status
+        );
+        return $response;
+    }
+
     public function followNotification($from, $to){ //$from - UserName -- $to - UserName
         $db = new DbOperations;
         $fromID = $db->getUserIDByUserName($from);
@@ -177,7 +263,7 @@ class PushNotification{
      * return $date
      */
     public function postLikeLastDate($fromID, $toID, $postID){
-        $sql = "SELECT NotificationDate FROM notification_postlike_view WHERE NotificationSenderId = ? AND UserId = ? AND PostId = ? ORDER BY NotificationDate DESC LIMIT 1";
+        $sql = "SELECT NotificationDate FROM notification_vote_view WHERE NotificationSenderId = ? AND UserId = ? AND PostId = ? ORDER BY NotificationDate DESC LIMIT 1";
         $stmt = $this->con->prepare($sql);
         $stmt->execute(array($fromID, $toID, $postID));
         $row = $stmt->fetch(PDO::FETCH_OBJ);
@@ -196,7 +282,7 @@ class PushNotification{
         $row = $stmt->fetch(PDO::FETCH_OBJ);
         $date = @$row->NotificationDate;
         if($date == null){
-            return date_create("2000-01-01 00:00:00");
+            return date_create("2000-01-01 00:00:00"); //Null gitmemesi için random bir date
         }else{
             return $date;
         }
